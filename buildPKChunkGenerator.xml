@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="create_run_jar" name="Create Runnable Jar for Project PKChunkGenerator">
+    <!--this file was created by Eclipse Runnable JAR Export Wizard-->
+    <!--ANT 1.7 is required                                        -->
+    <!--define folder properties-->
+    <property name="dir.buildfile" value="."/>
+    <property name="dir.workspace" value="/Users/kgalant/eclipse-workspace"/>
+    <property name="dir.jarfile" value="${dir.buildfile}"/>
+    <target name="create_run_jar">
+        <jar destfile="${dir.jarfile}/PKChunkGenerator.jar" filesetmanifest="mergewithoutmain">
+            <manifest>
+                <attribute name="Main-Class" value="com.kgalant.PKChunkGenerator"/>
+                <attribute name="Class-Path" value="."/>
+            </manifest>
+            <zipfileset excludes="META-INF/*.SF" src="/Users/kgalant/Documents/dev/sharedlibs/metadata-41.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="/Users/kgalant/Documents/dev/sharedlibs/partner-41.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="/Users/kgalant/Documents/dev/sharedlibs/force-wsc-41.0.0.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="/Users/kgalant/Documents/dev/sharedlibs/tooling-38.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="/Users/kgalant/Documents/dev/sharedlibs/commons-cli-1.3.1.jar"/>
+            <zipfileset excludes="META-INF/*.SF" src="/Users/kgalant/Documents/dev/sharedlibs/commons-io-2.4.jar"/>
+            <fileset dir="${dir.jarfile}/PKChunkGenerator/bin"/>
+        </jar>
+    </target>
+</project>
