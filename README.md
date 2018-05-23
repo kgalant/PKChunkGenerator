@@ -24,7 +24,7 @@ Options | Descreiption
  -a,--add `<base62ID,base10NumberToAdd>` |  add a base10 number to a base62 ID, get the resulting base62 ID
  -d,--distance `<ID1,ID2>`               |  calculate a base10 distance between two Salesforce IDs
  -g,--generatechunks                    | generate queries for chunks of a primary key range. Requires object name (-on), start and end IDs (-si, -ei), and optional query range start (-gt) and field names (fn) parameters. If chunksize parameter (-cs) is not provided, will generate 10 chunks for the entire range, as long as the chunks are less than 10M records each, or the required number of 10M record chunks. If field names parameter is not provided, will default to the ID field
- -b62,--convertbase62 `<base62id>`         convert a base62 id to a base10 number
+ -b62,--convertbase62 `<base62id>`   |      convert a base62 id to a base10 number
 
 Repo at https://github.com/kgalant/PKChunkGenerator
 
