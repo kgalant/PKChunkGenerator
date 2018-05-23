@@ -1,5 +1,10 @@
 package com.kgalant;
 
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +27,9 @@ public class PKChunkGenerator {
 	
 	private static boolean isStrict = false;
 	private static boolean isVerbose = false;
+	
+	private static final int DEFAULTCHUNKSIZE = 10000000;
+	private static final String DEFAULTFILENAME = "output.txt";
 
 	public static void main(String[] args) throws RemoteException, Exception {
 
@@ -52,6 +60,10 @@ public class PKChunkGenerator {
 			handleAddCalculation();
 			System.exit(0);
 		}
+		if(commandLine.hasOption(GENERATECHUNKSHORT)) {
+			handleGenerateChunks();
+			System.exit(0);
+		}
 
 		// if we're still here, print the help and exit
 
@@ -64,6 +76,129 @@ public class PKChunkGenerator {
 		//
 		//		generateBase62String(getBase10Number("02i0k00000KEZseAAH".substring(6,15)),400);
 		//		queryList = getExportQueriesForSObject(args[0], args[1], (Integer.parseInt(args[2])), args[3], args[4], args.length < 6 ? "" : args[5]);
+
+	}
+
+	private static void handleGenerateChunks() {
+		// check if we have all needed parameters
+		
+		int chunkSize = 10000000;
+		if (commandLine.hasOption(CHUNKSIZESHORT)) {
+			String chunksizeParam = commandLine.getOptionValue(CHUNKSIZESHORT);
+			if (chunksizeParam != null && chunksizeParam.length() > 0) {
+				try {
+					chunkSize = Integer.parseInt(chunksizeParam);
+				} catch (NumberFormatException e) {
+					System.out.println("Tried to convert input value " + chunksizeParam + " to a number, but failed. Cannot proceed");
+					e.printStackTrace();
+					System.exit(1);
+				}
+			}
+		}
+		// get field names
+		String fieldNames = "Id";
+		if (commandLine.getOptionValue(FIELDNAMESHORT) != null && commandLine.getOptionValue(FIELDNAMESHORT).length() > 0) {
+			fieldNames = commandLine.getOptionValue(FIELDNAMESHORT);
+		}
+		// get object name
+		String objectName = commandLine.getOptionValue(OBJECTNAMESHORT);
+		if (objectName == null || objectName.length() < 3) {
+			System.out.println("Invalid object name provided. Got: " + objectName + ". Cannot proceed");
+			System.exit(1);
+		}
+		// get start and end IDs
+		String startID = commandLine.getOptionValue(STARTIDSHORT);
+		String endID = commandLine.getOptionValue(ENDIDSHORT);
+		long startIDBase10 = decodeSalesforceID(startID);
+		long endIDBase10 = decodeSalesforceID(endID);
+		if (isStrict && 
+				(
+						(startIDBase10 > endIDBase10) || 
+						(!(startID.substring(6,  15).equals(endID.substring(6,  15))))
+				) 
+			) {
+			System.out.println("Converted start ID greater than end ID or prefixes don't match, and strict option is in force. Cannot proceed");
+			System.out.println("Start ID received: " + startID + " converted: " + startIDBase10 + " End ID: " + endID + 
+					" converted: " + endIDBase10);
+			System.exit(1);
+		}
+		// regenerate chunk size if no chunksize parameter is provided
+		if (!commandLine.hasOption(CHUNKSIZESHORT) && Math.abs(endIDBase10-startIDBase10) < 10 * DEFAULTCHUNKSIZE) {
+			chunkSize = (int) Math.round(((Math.abs((float)(endIDBase10-startIDBase10)))/10));
+		}
+		// now figure out the start / end in case they were flipped
+		if (endIDBase10 < startIDBase10) {
+			long temp = startIDBase10;
+			startIDBase10 = endIDBase10;
+			endIDBase10 = temp;
+		}
+		// get filename parameter
+		String filename = DEFAULTFILENAME;
+		if (commandLine.getOptionValue(OUTPUTFILESHORT) != null && commandLine.getOptionValue(OUTPUTFILESHORT).length() > 0) {
+			filename = commandLine.getOptionValue(OUTPUTFILESHORT);
+		}
+		// get gt parameter
+		boolean gt = false;
+		
+		if (commandLine.hasOption(RANGESTARTSHORT)) {
+			gt = true;
+		}
+		
+		// now generate the actual queries
+		
+		List<String> queryList = new ArrayList<String>();
+	    Integer batchCount = 1;
+	    String prefix = ((String)startID).substring(0,6);
+	    boolean firstBatch = true;
+	    for(long recordsProcessed = startIDBase10; recordsProcessed < endIDBase10; recordsProcessed += chunkSize) {
+	    		String startOperator = ">=";
+	        long numericEndRange = recordsProcessed + chunkSize - 1;
+	        if (numericEndRange > endIDBase10) numericEndRange = endIDBase10;
+	    		long numericStartRange = recordsProcessed;
+	    		if (firstBatch) {
+	    			if (gt) {
+	    				startOperator = ">";
+	    			}
+	    			firstBatch = false;
+	    		}
+	        String startRangeId = encodeBase10(numericStartRange, 9);
+	        String endRangeId = encodeBase10(numericEndRange, 9);
+//	        System.out.println("numericStartRange: " + numericStartRange + " ID:" + startRangeId);
+//    			System.out.println("numericEndRange: " + numericEndRange + " ID:" + endRangeId);
+	        String soql = "SELECT " + fieldNames + " FROM " + objectName + " WHERE Id " + 
+	        		startOperator + " '" + prefix + startRangeId + 
+	        		"' AND Id <= '" + prefix + endRangeId + "' ORDER BY Id asc limit " + chunkSize;
+	        System.out.println(soql);
+	        queryList.add(soql);
+	        
+	        batchCount++;
+	    }
+	    
+	    // now generate the file
+	    
+		BufferedWriter writer = null;
+		try {
+			writer = new BufferedWriter(new OutputStreamWriter(
+					new FileOutputStream(filename), StandardCharsets.ISO_8859_1));
+			for (String s : queryList) {
+				writer.write(s);
+				writer.newLine();
+			}
+
+		} catch (IOException e) {
+			System.out.println("Something failed when writing file. See stack trace below.");
+			e.printStackTrace();
+			System.exit(1);
+		} finally {
+			try {
+				if (writer != null)
+					writer.close();
+			} catch (IOException e) {
+				System.out.println("Something failed when closing output stream. See stack trace below.");
+				e.printStackTrace();
+				System.exit(1);
+			}
+		}
 
 	}
 
@@ -201,11 +336,10 @@ public class PKChunkGenerator {
 	{
 		try
 		{
-			int inputBase = 10;
 			int outputBase = 62;
 			String outputValue = ""; 
 			int x;
-			int maxBase = base62Chars.length();
+			base62Chars.length();
 			if(decimalValue == 0) {
 				return "0";
 			}
@@ -306,6 +440,10 @@ public class PKChunkGenerator {
 		return ret;
 	}
 
+	private static long decodeSalesforceID (String salesforceID) {
+		return decodeBase62(salesforceID.substring(6, 15));
+	}
+	
 	private static void setupOptions() {
 
 
@@ -322,34 +460,79 @@ public class PKChunkGenerator {
 		OptionGroup operations = new OptionGroup();
 
 		operations.addOption( Option.builder(CONVERTBASE62SHORT).longOpt(CONVERTBASE62LONG)
-				.desc( "convert a base62 id to a base10 number <base62id>" )
-				.hasArg()
+				.desc( "convert a base62 id to a base10 number" )
+				.hasArg().argName("base62id")
 				.build() );
 
 
 		operations.addOption( Option.builder(CONVERTBASE10SHORT).longOpt(CONVERTBASE10LONG)
-				.desc( "convert a base10 id to a base62 number <base10number>" )
-				.hasArg()
+				.desc( "convert a base10 id to a base62 number" )
+				.hasArg().argName("base10number")
 				.build() );
 
 		operations.addOption( Option.builder(DISTANCESHORT).longOpt(DISTANCELONG)
-				.desc( "calculate a base10 distance between two Salesforce IDs <ID1,ID2>" )
-				.hasArg()
+				.desc( "calculate a base10 distance between two Salesforce IDs" )
+				.hasArg().argName("ID1,ID2")
 				.build() );
 		operations.addOption( Option.builder(ADDSHORT).longOpt(ADDLONG)
-				.desc( "add a base10 number to a base62 ID, get the resulting base62 ID <base62ID,base10NumberToAdd>" )
-				.hasArg()
+				.desc( "add a base10 number to a base62 ID, get the resulting base62 ID" )
+				.hasArg().argName("base62ID,base10NumberToAdd")
 				.build() );
+		
+		operations.addOption( Option.builder(GENERATECHUNKSHORT).longOpt(GENERATECHUNKLONG)
+				.desc( "generate queries for chunks of a primary key range. Requires object name (-on), "
+						+ "start and end IDs (-si, -ei), and optional query range start (-gt) and field names (fn) parameters.\n"
+						+ "If chunksize parameter (-cs) is not provided, will generate 10 chunks for the entire range, as long as the chunks "
+						+ "are less than 10M records each, or the required number of 10M record chunks.\n"
+						+ "If field names parameter is not provided, will default to the ID field" )
+				.build() );
+		
 
 		options.addOption( Option.builder(PREFIXSHORT).longOpt(PREFIXLONG)
-				.desc( "add a prefix to converted base 10 number <prefix>" )
-				.hasArg()
+				.desc( "add a prefix to converted base 10 number" )
+				.hasArg().argName("prefix")
 				.build() );
 
 		options.addOption( Option.builder(STRICTSHORT).longOpt(STRICTLONG)
 				.desc( "strict calculations, i.e. throw error e.g. when prefixes don't match or distance would be negative")
 				.build() );
-
+		
+		options.addOption( Option.builder(OBJECTNAMESHORT).longOpt(OBJECTNAMELONG)				
+				.desc( "Required for -" + GENERATECHUNKSHORT + " operation. Name of the object to generate chunk queries for, "
+						+ "e.g. Asset or Product2, etc."  )
+				.hasArg().argName("objectname")
+				.build() );
+		options.addOption( Option.builder(FIELDNAMESHORT).longOpt(FIELDNAMELONG)				
+				.desc( "Optional for -" + GENERATECHUNKSHORT + " operation. Commaseparated names of the fields to extract from "
+						+ "the object to generate chunk queries for, "
+						+ "e.g. Id,Name,LastModifiedBy,My_Custom_Field__c, etc. No spaces please. Will default to just the ID "
+						+ "field if not provided."  )
+				.hasArg().argName("fieldnamelist")
+				.build() );
+		options.addOption( Option.builder(STARTIDSHORT).longOpt(STARTIDLONG)				
+				.desc( "Required for -" + GENERATECHUNKSHORT + " operation. Starting ID for the range to generate chunk queries for, ")
+				.hasArg().argName("SalesforceID")
+				.build() );
+		options.addOption( Option.builder(ENDIDSHORT).longOpt(ENDIDLONG)				
+				.desc( "Required for -" + GENERATECHUNKSHORT + " operation. Ending ID for the range to generate chunk queries for, ")
+				.hasArg().argName("SalesforceID")
+				.build() );
+		options.addOption( Option.builder(OUTPUTFILESHORT).longOpt(OUTPUTFILELONG)				
+				.desc( "Optional for -" + GENERATECHUNKSHORT + " operation. Name of the file to generate. "
+						+ "Defaults to output.txt if not provided. ")
+				.hasArg().argName("filename")
+				.build() );
+		options.addOption( Option.builder(CHUNKSIZESHORT).longOpt(CHUNKSIZELONG)				
+				.desc( "Optional for -" + GENERATECHUNKSHORT + " operation. Size of chunks to generate. "
+						+ "Defaults to 10 chunks for less than 100M records or the required number of 10M record chunks if not provided. ")
+				.hasArg().argName("chunksize")
+				.build() );
+		
+		options.addOption( Option.builder(RANGESTARTSHORT).longOpt(RANGESTARTLONG)				
+				.desc( "Optional for -" + GENERATECHUNKSHORT + " operation. \nIf provided the generated queries will always be "
+						+ "ID > startID AND ID =< endID\n"
+						+ "If not provided, queries will be ID >= startID AND ID =< endID\\n ")
+				.build() );
 		options.addOptionGroup(operations);
 
 	}
@@ -400,4 +583,20 @@ public class PKChunkGenerator {
 	final static String STRICTLONG = "strict";
 	final static String ADDSHORT = "a";
 	final static String ADDLONG = "add";
+	final static String GENERATECHUNKSHORT = "g";
+	final static String GENERATECHUNKLONG = "generatechunks";
+	final static String OBJECTNAMESHORT = "on";
+	final static String OBJECTNAMELONG = "objectname";
+	final static String FIELDNAMESHORT = "fn";
+	final static String FIELDNAMELONG = "fieldnames";
+	final static String STARTIDSHORT = "si";
+	final static String STARTIDLONG = "startid";
+	final static String ENDIDSHORT = "ei";
+	final static String ENDIDLONG = "endid";
+	final static String RANGESTARTSHORT = "gt";
+	final static String RANGESTARTLONG = "greaterthan";
+	final static String OUTPUTFILESHORT = "of";
+	final static String OUTPUTFILELONG = "outputfile";
+	final static String CHUNKSIZESHORT = "cs";
+	final static String CHUNKSIZELONG = "chunksize";
 }
