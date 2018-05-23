@@ -540,6 +540,7 @@ public class PKChunkGenerator {
 	private static void printHelp() {
 		HelpFormatter formatter = new HelpFormatter();
 		formatter.setOptionComparator(null);
+		formatter.setWidth(160);
 
 		String header = "Do interesting stuff with Salesforce base62 IDs\n\n";
 		String footer = "\nRepo at https://github.com/kgalant/PKChunkGenerator";
