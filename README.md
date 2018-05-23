@@ -1,8 +1,8 @@
 # PKChunkGenerator
 Generates chunks of a Salesforce primary key range for exporting large data volumes in smaller pieces, by doing arithmetic on the base-62 numbers of the Salesforce IDs.
 
-usage: java -jar PKChunkGenerator.jar [-h] [-v] [-pf <prefix>] [-st] [-on <objectname>] [-fn <fieldnamelist>] [-si <SalesforceID>] [-ei <SalesforceID>] [-of
-       <filename>] [-cs <chunksize>] [-gt] [-b10 <base10number> | -a <base62ID,base10NumberToAdd> | -d <ID1,ID2> | -g | -b62 <base62id>]
+usage: `java -jar PKChunkGenerator.jar [-h] [-v] [-pf <prefix>] [-st] [-on <objectname>] [-fn <fieldnamelist>] [-si <SalesforceID>] [-ei <SalesforceID>] [-of
+       <filename>] [-cs <chunksize>] [-gt] [-b10 <base10number> | -a <base62ID,base10NumberToAdd> | -d <ID1,ID2> | -g | -b62 <base62id>]`
        
 ## Do interesting stuff with Salesforce base62 IDs
 
