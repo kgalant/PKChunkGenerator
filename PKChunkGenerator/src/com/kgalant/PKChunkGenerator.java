@@ -280,7 +280,7 @@ public class PKChunkGenerator {
 		// default pad to 9 characters for SF IDs
 		String convertedBase62Id = encodeBase10(base10ToConvert, 9);
 
-		if (isStrict) {
+		if (commandLine.hasOption(PREFIXSHORT)) {
 			convertedBase62Id = commandLine.getOptionValue(PREFIXSHORT) + convertedBase62Id;
 		}
 		System.out.println(convertedBase62Id);
